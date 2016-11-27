@@ -10,10 +10,10 @@ instrument.on('listedPorts', function(ports) { instrument.connect(ports[0]); });
 instrument.listPorts();
 
 input.on('message', function(deltaTime, message) {
-  console.log(message);
-  if (message[2] === 95) { // note on, channel 1
-    // message[1] is the note number
-    instrument.playNote(baseA4 * Math.pow(2, (message[1] - 57) / 12));
+  var isNote = message[0].toString(2).substr(0,4) === "1001";
+  if (isNote && message[2] > 0) {
+    var channel = parseInt(message[0].toString(2).substr(4), 2);
+    instrument.playNote(message[1], channel);
   }
 });
 

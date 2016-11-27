@@ -12,8 +12,12 @@ function SolenoidInstrument() {
 
 util.inherits(SolenoidInstrument, events.EventEmitter);
 
-SolenoidInstrument.prototype.playNote = function(hz) {
-  this.pushMessage(parseInt(hz).toString());
+SolenoidInstrument.prototype.playNote = function(note, channel) {
+  var b = new Buffer(2);
+  b.writeUInt8(parseInt(note, 10), 0);
+  b.writeUInt8(parseInt(channel, 10), 1);
+  console.log("note, channel", note, channel);
+  this.pushMessage( b );
 };
 
 SolenoidInstrument.prototype.listPorts = function() {
@@ -31,6 +35,7 @@ SolenoidInstrument.prototype.listPorts = function() {
 
 SolenoidInstrument.prototype.connect = function(port) {
   this.serial = new SerialPort(port, {baudrate: 115200, autoOpen: false});
+  this.serial.on("data", function(a) {console.log(a.toString()); });
   this.serial.open(function(err) {
     if (err) { console.log(err); }
     this.emit("connected");
