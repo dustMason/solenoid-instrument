@@ -1,27 +1,41 @@
-byte directionPin = 12;
-byte stepPin = 11;
-byte resetPin = A1;
+#include <Tone.h>
 
-unsigned long waitTime = 10;
-int currentNote = 440;
+byte stepPins[] = { 2, 3, 4, 12 };
+byte dirPins[] = { 5, 6, 7, 13 };
+
+// atmega328 has only 2 extra HW timers, so we can only use two Tone objects
+Tone tone1;
+Tone tone2;
+
+int currentNote = 0;
+int currentChannel = 0;
 
 void setup() {
   Serial.begin(115200);
-  Serial.setTimeout(20);
-  pinMode(directionPin, OUTPUT);
-  pinMode(stepPin, OUTPUT);
-  pinMode(resetPin, OUTPUT);
-  digitalWrite(directionPin, HIGH);
-  digitalWrite(resetPin, HIGH);
+  tone1.begin(stepPins[0]);
+  tone2.begin(stepPins[1]);
+  for (int i = 0; i < 4; i++) {
+    pinMode(dirPins[i], OUTPUT);
+    digitalWrite(dirPins[i], LOW);
+  }
+  // pin 8 is enable pin on CNC shield
+  // LOW means all motors enabled
+  pinMode(8, OUTPUT);
+  digitalWrite(8, LOW);
 }
 
 void loop() {
-  int t = Serial.parseInt();
-  if (currentNote != t && t > 50) {
-    tone(stepPin, t);
-    currentNote = t;
+  if (Serial.available() == 2) {
+    currentNote = Serial.read();
+    currentChannel = Serial.read();
+    unsigned int freq = (float(440) * pow(2, float((currentNote - 57) / float(12))));
+    // Serial.println(currentNote);
+    // Serial.println(currentChannel);
+    // Serial.println(freq);
+    if (currentChannel == 0) {
+      tone1.play(freq);
+    } else if (currentChannel == 1) {
+      tone2.play(freq);
+    }
   }
 }
-
-
-
