@@ -6,7 +6,10 @@ var baseA4 = 440.0;
 var input = new midi.input();
 var instrument = new SolenoidInstrument();
 
-instrument.on('listedPorts', function(ports) { instrument.connect(ports[0]); });
+instrument.on('listedPorts', function(ports) {
+  console.log("Connect to", ports[0]);
+  instrument.connect(ports[0]);
+});
 instrument.listPorts();
 
 input.on('message', function(deltaTime, message) {
