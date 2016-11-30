@@ -1,27 +1,37 @@
-byte directionPin = 12;
-byte stepPin = 11;
-byte resetPin = A1;
+#include <Wire.h>
+#include <Adafruit_MotorShield.h>
+#include "utility/Adafruit_MS_PWMServoDriver.h"
 
-unsigned long waitTime = 10;
-int currentNote = 440;
+Adafruit_MotorShield AFMS = Adafruit_MotorShield(); 
+
+int currentNote = 0;
+int currentChannel = 0;
 
 void setup() {
   Serial.begin(115200);
-  Serial.setTimeout(20);
-  pinMode(directionPin, OUTPUT);
-  pinMode(stepPin, OUTPUT);
-  pinMode(resetPin, OUTPUT);
-  digitalWrite(directionPin, HIGH);
-  digitalWrite(resetPin, HIGH);
+  AFMS.begin(); // default freq is 1.6KHz
+  /* AFMS.setPin(MOTOR1_B, LOW); */
 }
 
 void loop() {
-  int t = Serial.parseInt();
-  if (currentNote != t && t > 50) {
-    tone(stepPin, t);
-    currentNote = t;
+  if (Serial.available() == 2) {
+    currentNote = Serial.read();
+    currentChannel = Serial.read();
+    unsigned int freq = (float(440) * pow(2, float((currentNote - 57) / float(12))));
+
+    Serial.println(currentNote);
+    Serial.println(currentChannel);
+    Serial.println(freq);
+
+    /* AFMS.setPWM(MOTOR1_A, freq); */
+    /* AFMS.setPWM(MOTOR1_B, freq); */
+    AFMS.setPin(MOTOR1_A, HIGH);
+    AFMS.setPin(MOTOR1_B, LOW);
+
+    /* if (currentChannel == 0) { */
+    /*   tone1.play(freq); */
+    /* } else if (currentChannel == 1) { */
+    /*   tone2.play(freq); */
+    /* } */
   }
 }
-
-
-
