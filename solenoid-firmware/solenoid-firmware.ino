@@ -122,9 +122,6 @@ void tone_multi(uint8_t channel, uint16_t frequency, uint32_t duration) {
     *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
     tone_toggle_count0 = count;
     tone_usec0 = usec;
-    newValue = (float)(F_BUS / 1000000) * usec - 0.5;
-    if (!PIT_enabled) enable_PIT();
-    start_PIT(channel,newValue);
   } else if (channel == 1) {
     tone_state1 = 1;
     tone_reg1 = portClearRegister(pin);
@@ -133,9 +130,6 @@ void tone_multi(uint8_t channel, uint16_t frequency, uint32_t duration) {
     *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
     tone_toggle_count1 = count;
     tone_usec1 = usec;
-    newValue = (float)(F_BUS / 1000000) * usec - 0.5;
-    if (!PIT_enabled) enable_PIT();
-    start_PIT(channel,newValue);
   } else if (channel == 2) {
     tone_state2 = 1;
     tone_reg2 = portClearRegister(pin);
@@ -144,9 +138,6 @@ void tone_multi(uint8_t channel, uint16_t frequency, uint32_t duration) {
     *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
     tone_toggle_count2 = count;
     tone_usec2 = usec;
-    newValue = (float)(F_BUS / 1000000) * usec - 0.5;
-    if (!PIT_enabled) enable_PIT();
-    start_PIT(channel,newValue);
   } else {
     tone_state3 = 1;
     tone_reg3 = portClearRegister(pin);
@@ -155,10 +146,12 @@ void tone_multi(uint8_t channel, uint16_t frequency, uint32_t duration) {
     *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
     tone_toggle_count3 = count;
     tone_usec3 = usec;
-    newValue = (float)(F_BUS / 1000000) * usec - 0.5;
-    if (!PIT_enabled) enable_PIT();
-    start_PIT(channel,newValue);
   }
+
+  newValue = (float)(F_BUS / 1000000) * usec - 0.5;
+  if (!PIT_enabled) enable_PIT();
+  start_PIT(channel,newValue);
+
   __enable_irq();
 }
 
