@@ -26,7 +26,7 @@ SolenoidInstrument.prototype.listPorts = function() {
     ports = ports.map(function(port){ return port.comName; });
     // put the most likely candidate first
     ports = ports.sort(function(a, b) {
-      return b.indexOf("usbserial") - a.indexOf("usbserial");
+      return b.indexOf("usbmodem") - a.indexOf("usbmodem");
     });
     this.portList = ports;
     this.emit("listedPorts", ports);
