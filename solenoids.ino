@@ -198,10 +198,23 @@ void loop() {
   usbMIDI.read();
 }
 
+byte recentPin = 5;
+uint8_t playingNotes[] = { 0,0,0,0 }; // indexed to soundpins
+
 void OnNoteOn(byte channel, byte note, byte velocity) {
+  // convert midi note to frequency, based on A440
   unsigned int freq = (float(440) * pow(2, float((note - 57) / float(12))));
-  tone_multi(channel-1, freq, 0);
+  recentPin = (recentPin + 1) % 4;
+  // todo - this should only start playing notes if there are available
+  // voices - ie, only use pins corresponding to playingNotes positions that eq 0
+  tone_multi(recentPin, freq, 0);
+  playingNotes[recentPin] = note;
 }
 void OnNoteOff(byte channel, byte note, byte velocity) {
-
+  for (byte i = 0; i < 4; i++) {
+    if (playingNotes[i] == note) {
+      noTone_multi(i);
+      playingNotes[i] = 0;
+    }
+  }
 }
