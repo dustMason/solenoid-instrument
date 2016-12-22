@@ -36,7 +36,7 @@ static float tone_usec3=0.0;
 #define TONE_OUTPUT_PIN2  tone_reg2[384] = 1
 #define TONE_OUTPUT_PIN3  tone_reg3[384] = 1
 
-uint8_t soundpins[] = { 8, 17, 18, 19 };
+uint8_t soundpins[] = { 9,10,11,12 };
 
 static bool PIT_enabled = false;
 
@@ -190,17 +190,18 @@ void noTone_multi(uint8_t channel) {
 }
 
 void setup() {
-  Serial.begin(9600);
+  usbMIDI.setHandleNoteOff(OnNoteOff);
+  usbMIDI.setHandleNoteOn(OnNoteOn);
 }
 
 void loop() {
-  if (Serial.available() == 2) {
-    currentNote = Serial.read();
-    currentChannel = Serial.read();
-    unsigned int freq = (float(440) * pow(2, float((currentNote - 57) / float(12))));
-    Serial.println(currentNote);
-    Serial.println(currentChannel);
-    Serial.println(freq);
-    tone_multi(currentChannel, freq, 0);
-  }
+  usbMIDI.read();
+}
+
+void OnNoteOn(byte channel, byte note, byte velocity) {
+  unsigned int freq = (float(440) * pow(2, float((note - 57) / float(12))));
+  tone_multi(channel-1, freq, 0);
+}
+void OnNoteOff(byte channel, byte note, byte velocity) {
+
 }
