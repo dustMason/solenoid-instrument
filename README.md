@@ -4,6 +4,26 @@ Four independent solenoid voices for a **Teensy 3.1 or 3.2**, designed for the A
 
 The driver outputs remain **pins 9, 10, 11, 12**, in that order. This preserves the original sketch's wiring. Confirm the actual Teensy model and assembled driver wiring before flashing: the driver-board artwork alone does not identify the Teensy. The build rejects other MCU types and non-MIDI USB modes.
 
+## Next steps: before the BeatStep arrives
+
+**We can test the firmware now with just the Mac and the existing Teensy/driver.** The Mac can generate the MIDI messages; the BeatStep Pro is not needed for these checks.
+
+1. **Prepare on the Mac.** Run the three commands below, then [build the firmware](#build-and-validate) and [build MIDI Bridge](#build-the-mac-app). These tests use simulated GPIO or virtual MIDI ports and do not actuate hardware.
+2. **Flash and check USB, with coil power disconnected.** Confirm Teensy 3.1/3.2 and pins 9–12, save a build of the old firmware if you want a rollback, and upload the new HEX with Teensy Loader. Confirm it appears as a MIDI output on the Mac.
+3. **Check the real firmware's outputs.** Follow the [bench playbook](docs/bench-test.md): send individual tap, flam, buzz, and stop messages directly over USB. A scope or logic analyzer on pins 9–12 verifies timing without powering the coils.
+4. **Try one real tapper.** Once the coil voltage and driver/supply ratings are confirmed, connect one coil with a suitable current-limited supply. Start with the playbook's single 1 ms tap, increase only as needed, then repeat for the other outputs. Record the useful pulse width; leave sustained buzz testing until the coil/driver limits are established.
+5. **When the Pro arrives.** Back up its settings, [import our preset and set the global options](beatstep-pro/README.md), then connect **BeatStep Pro → MIDI Bridge → Teensy**. Verify pad order, relative knobs, simultaneous parts, Stop/All Off, and reconnect behavior. Export the final native Device Settings file from MCC.
+
+Run from the repository root:
+
+```sh
+bash scripts/test.sh
+python3 tests/beatstep_config_test.py
+bash midi-bridge/scripts/test.sh
+```
+
+**Current status:** 18 firmware/adapter, 8 config, and 5 virtual MIDI tests pass. Physical flashing, output timing, coil calibration, and MCC import are still pending. The [bench playbook](docs/bench-test.md) includes expected results and a small results table to fill in as we go.
+
 ## Build the Mac app
 
 The native MIDI Bridge app's source, Swift package, tests and packaging script are included in [`midi-bridge/`](midi-bridge/). Build on a Mac with Xcode Command Line Tools and Swift 5.9 or later (`xcode-select --install` if needed). No third-party packages or full Xcode project are required.
@@ -143,13 +163,7 @@ The script stages the sketch in `.build/sketch/solenoids` because Arduino requir
 
 For Arduino IDE, open the staged sketch, select **Teensy 3.2 / 3.1**, **USB Type: MIDI** (or **Serial + MIDI**), and **CPU Speed: 72 MHz**. Upload with Teensy Loader only after confirming the MCU and disconnecting the solenoid supply for initial checks.
 
-Before the jam, verify on the physical instrument:
-
-1. With the solenoid supply disconnected, confirm USB enumeration and pins 9–12 idle low. Check pulse widths and duty with a scope or logic analyzer.
-2. Test one connected solenoid at a time with a suitable current-limited supply and short, low-energy taps. Confirm pin order and calibrate the software constants to the actual coil/driver.
-3. Check drum pads 1–4 produce separate taps, pads 5–8 make flams, and the two melodic sequences buzz independently. Exercise mode changes, velocity, gate length, ADSR, and relative encoders.
-4. Check Stop, MIDI Bridge All Off, cable disconnect/reconnect, laptop sleep, and stalled clock leave the outputs off. Reconnect must not replay old hits.
-5. Check sustained/retriggered playing and coil/driver temperatures within the component ratings. No physical timing, temperature or listening validation has been performed by the automated tests.
+Follow the [next-steps playbook](#next-steps-before-the-beatstep-arrives) and [bench tests](docs/bench-test.md) for physical validation. No physical timing, temperature, or listening validation has been performed by the automated tests.
 
 ## References
 

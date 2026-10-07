@@ -53,6 +53,8 @@ The app uses CoreMIDI's MIDI 1.0 UMP interface and preserves incoming event list
 
 ## Test
 
+You can also [test the Teensy's firmware directly from the Mac](../docs/bench-test.md) before the BeatStep Pro arrives. That bench path uses SendMIDI and does not require this bridge.
+
 From the repository root:
 
 ```sh
