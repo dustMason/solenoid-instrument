@@ -1,240 +1,102 @@
-// lots of copypasta from https://github.com/mit-mit-randomprojectlab/keyboard_multitone
-// which in turn uses code from Teensy's IntervalTimer.cpp
+#include <Arduino.h>
+#include <IntervalTimer.h>
+#include <util/atomic.h>
+#include "solenoid_engine.h"
 
-static uint32_t tone_toggle_count0;
-static uint32_t tone_toggle_count1;
-static uint32_t tone_toggle_count2;
-static uint32_t tone_toggle_count3;
+#if !defined(__MK20DX256__)
+#error "Select Teensy 3.1 / 3.2. Other boards have not been validated for this wiring."
+#endif
+#if !defined(USB_MIDI) && !defined(USB_MIDI_SERIAL)
+#error "Select USB Type: MIDI (or Serial + MIDI)."
+#endif
 
-static volatile uint8_t *tone_reg0;
-static volatile uint8_t *tone_reg1;
-static volatile uint8_t *tone_reg2;
-static volatile uint8_t *tone_reg3;
+// Preserve the original driver connections. Never connect coils to GPIO.
+static const uint8_t kPins[4] = {9, 10, 11, 12};
+static solenoid::Engine instrument;
+static IntervalTimer outputTimer;
+extern "C" { extern volatile uint8_t usb_configuration; }
 
-static uint8_t tone_state0=0;
-static uint8_t tone_state1=0;
-static uint8_t tone_state2=0;
-static uint8_t tone_state3=0;
+// The timer exclusively owns the engine. USB callbacks only enqueue small,
+// bounded messages; no floats, allocation, USB calls or waits run in the ISR.
+struct Event { uint8_t type, channel, a, b; };
+static const uint8_t kQueueMask = 63;
+static volatile Event events[64];
+static volatile uint8_t readIndex = 0, writeIndex = 0;
+static volatile bool overflowed = false;
+static volatile uint32_t loopHeartbeat = 0;
 
-static float tone_usec0=0.0;
-static float tone_usec1=0.0;
-static float tone_usec2=0.0;
-static float tone_usec3=0.0;
-
-#define TONE_CLEAR_PIN0   tone_reg0[0] = 1
-#define TONE_CLEAR_PIN1   tone_reg1[0] = 1
-#define TONE_CLEAR_PIN2   tone_reg2[0] = 1
-#define TONE_CLEAR_PIN3   tone_reg3[0] = 1
-
-#define TONE_TOGGLE_PIN0  tone_reg0[128] = 1
-#define TONE_TOGGLE_PIN1  tone_reg1[128] = 1
-#define TONE_TOGGLE_PIN2  tone_reg2[128] = 1
-#define TONE_TOGGLE_PIN3  tone_reg3[128] = 1
-
-#define TONE_OUTPUT_PIN0  tone_reg0[384] = 1
-#define TONE_OUTPUT_PIN1  tone_reg1[384] = 1
-#define TONE_OUTPUT_PIN2  tone_reg2[384] = 1
-#define TONE_OUTPUT_PIN3  tone_reg3[384] = 1
-
-uint8_t soundpins[] = { 9,10,11,12 };
-
-static bool PIT_enabled = false;
-
-int currentNote = 0;
-int currentChannel = 0;
-
-void enable_PIT() {
-  SIM_SCGC6 |= SIM_SCGC6_PIT;
-  PIT_MCR = 0;
-  PIT_enabled = true;
-}
-
-typedef volatile uint32_t* reg;
-reg PIT_LDVAL;
-reg PIT_TCTRL;
-uint8_t IRQ_PIT_CH;
-
-void start_PIT(uint8_t PIT_id, uint32_t newValue) {
-  // point to the correct registers
-  PIT_LDVAL = &PIT_LDVAL0 + PIT_id * 4;
-  PIT_TCTRL = &PIT_TCTRL0 + PIT_id * 4;
-
-  // write value to register and enable interrupt
-  *PIT_TCTRL = 0;
-  *PIT_LDVAL = newValue;
-  *PIT_TCTRL = 3;
-
-  IRQ_PIT_CH = IRQ_PIT_CH0 + PIT_id;
-  NVIC_SET_PRIORITY(IRQ_PIT_CH, 128);
-  NVIC_ENABLE_IRQ(IRQ_PIT_CH);
-}
-
-// Interupt functions
-void pit0_isr() { 
-  PIT_TFLG0 = 1; 
-  TONE_TOGGLE_PIN0;
-  tone_toggle_count0--;
-  if (tone_toggle_count0 == 0xFFFFFFFB) tone_toggle_count0 = 0xFFFFFFFD;
-}
-void pit1_isr() { 
-  PIT_TFLG1 = 1; 
-  TONE_TOGGLE_PIN1;
-  tone_toggle_count1--;
-  if (tone_toggle_count1 == 0xFFFFFFFB) tone_toggle_count1 = 0xFFFFFFFD;
-}
-void pit2_isr() { 
-  PIT_TFLG2 = 1; 
-  TONE_TOGGLE_PIN2;
-  tone_toggle_count2--;
-  if (tone_toggle_count2 == 0xFFFFFFFB) tone_toggle_count2 = 0xFFFFFFFD;
-}
-void pit3_isr() { 
-  PIT_TFLG3 = 1; 
-  TONE_TOGGLE_PIN3;
-  tone_toggle_count3--;
-  if (tone_toggle_count3 == 0xFFFFFFFB) tone_toggle_count3 = 0xFFFFFFFD;
-}
-
-void tone_multi(uint8_t channel, uint16_t frequency, uint32_t duration) {
-  uint32_t count;
-  volatile uint32_t *config;
-  float usec;
-  uint32_t newValue;
-
-  uint8_t pin = soundpins[channel];
-
-  if (pin >= CORE_NUM_DIGITAL) return;
-  if (duration > 0) {
-    count = (frequency * duration / 1000) * 2;
-    if (!(count & 1)) count++; // always full waveform cycles
-  } else {
-    count = 0xFFFFFFFD;
-  }
-  usec = (float)500000.0 / (float)frequency;
-  config = portConfigRegister(pin);
-
+void enqueue(uint8_t type, uint8_t channel, uint8_t a, uint8_t b) {
+  const uint32_t interruptsWereDisabled = __get_primask();
   __disable_irq();
-  if (channel == 0) {
-    tone_state0 = 1;
-    tone_reg0 = portClearRegister(pin);
-    TONE_CLEAR_PIN0; // clear pin
-    TONE_OUTPUT_PIN0; // output mode;
-    *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-    tone_toggle_count0 = count;
-    tone_usec0 = usec;
-  } else if (channel == 1) {
-    tone_state1 = 1;
-    tone_reg1 = portClearRegister(pin);
-    TONE_CLEAR_PIN1; // clear pin
-    TONE_OUTPUT_PIN1; // output mode;
-    *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-    tone_toggle_count1 = count;
-    tone_usec1 = usec;
-  } else if (channel == 2) {
-    tone_state2 = 1;
-    tone_reg2 = portClearRegister(pin);
-    TONE_CLEAR_PIN2; // clear pin
-    TONE_OUTPUT_PIN2; // output mode;
-    *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-    tone_toggle_count2 = count;
-    tone_usec2 = usec;
-  } else {
-    tone_state3 = 1;
-    tone_reg3 = portClearRegister(pin);
-    TONE_CLEAR_PIN3; // clear pin
-    TONE_OUTPUT_PIN3; // output mode;
-    *config = PORT_PCR_SRE | PORT_PCR_DSE | PORT_PCR_MUX(1);
-    tone_toggle_count3 = count;
-    tone_usec3 = usec;
+  const uint8_t next = (writeIndex + 1) & kQueueMask;
+  if (next == readIndex) {
+    overflowed = true;
+  } else if (!overflowed) {
+    events[writeIndex].type = type;
+    events[writeIndex].channel = channel;
+    events[writeIndex].a = a;
+    events[writeIndex].b = b;
+    writeIndex = next;
   }
-
-  newValue = (float)(F_BUS / 1000000) * usec - 0.5;
-  if (!PIT_enabled) enable_PIT();
-  start_PIT(channel,newValue);
-
-  __enable_irq();
+  if (!interruptsWereDisabled) __enable_irq();
 }
 
-void noTone_multi(uint8_t channel) {
-  uint8_t pin = soundpins[channel];
-  if (pin >= CORE_NUM_DIGITAL) return;
-  __disable_irq();
+void onNoteOn(byte channel, byte note, byte velocity) { enqueue(1, channel, note, velocity); }
+void onNoteOff(byte channel, byte note, byte velocity) { enqueue(2, channel, note, velocity); }
+void onControlChange(byte channel, byte cc, byte value) { enqueue(3, channel, cc, value); }
+void onClock() { enqueue(4, 0, 0, 0); }
+void onStop() { enqueue(5, 0, 0, 0); }
+void onStart() { enqueue(6, 0, 0, 0); }
+void onContinue() { enqueue(6, 0, 0, 0); }
+void onReset() { enqueue(5, 0, 0, 0); }
 
-  PIT_TCTRL = &PIT_TCTRL0 + channel * 4;
-  IRQ_PIT_CH = IRQ_PIT_CH0 + channel;
-  *PIT_TCTRL = 0;
-  NVIC_DISABLE_IRQ(IRQ_PIT_CH);
-
-  if (channel == 0) {
-    if (tone_state0 == 1) {
-      TONE_CLEAR_PIN0;
-      tone_state0 = 0;
-    }
-  } else if (channel == 1) {
-    if (tone_state1 == 1) {
-      TONE_CLEAR_PIN1;
-      tone_state1 = 0;
-    }
-  } else if (channel == 2) {
-    if (tone_state2 == 1) {
-      TONE_CLEAR_PIN2;
-      tone_state2 = 0;
-    }
+void updateOutputs() {
+  const uint32_t now = micros();
+  if (overflowed || !usb_configuration || uint32_t(now - loopHeartbeat) > 250000) {
+    readIndex = writeIndex;
+    overflowed = false;
+    instrument.allOff();
   } else {
-    if (tone_state3 == 1) {
-      TONE_CLEAR_PIN3;
-      tone_state3 = 0;
+    for (uint8_t n = 0; n < 8 && readIndex != writeIndex; ++n) {
+      const uint8_t i = readIndex;
+      const Event event = {events[i].type, events[i].channel, events[i].a, events[i].b};
+      readIndex = (i + 1) & kQueueMask;
+      switch (event.type) {
+        case 1: instrument.noteOn(event.channel, event.a, event.b, now); break;
+        case 2: instrument.noteOff(event.channel, event.a, now); break;
+        case 3: instrument.controlChange(event.channel, event.a, event.b, now); break;
+        case 4: instrument.clock(now); break;
+        case 5: instrument.allOff(); break;
+        case 6: instrument.start(now); break;
+      }
     }
   }
-  __enable_irq();
+  const uint8_t outputs = instrument.tick(now);
+  digitalWriteFast(9, (outputs & 1) ? HIGH : LOW);
+  digitalWriteFast(10, (outputs & 2) ? HIGH : LOW);
+  digitalWriteFast(11, (outputs & 4) ? HIGH : LOW);
+  digitalWriteFast(12, (outputs & 8) ? HIGH : LOW);
 }
 
 void setup() {
-  usbMIDI.setHandleNoteOff(onNoteOffChannelVoicing);
-  usbMIDI.setHandleNoteOn(onNoteOnChannelVoicing);
+  for (uint8_t i = 0; i < 4; ++i) { digitalWrite(kPins[i], LOW); pinMode(kPins[i], OUTPUT); }
+  usbMIDI.setHandleNoteOn(onNoteOn);
+  usbMIDI.setHandleNoteOff(onNoteOff);
+  usbMIDI.setHandleControlChange(onControlChange);
+  usbMIDI.setHandleClock(onClock);
+  usbMIDI.setHandleStart(onStart);
+  usbMIDI.setHandleContinue(onContinue);
+  usbMIDI.setHandleStop(onStop);
+  usbMIDI.setHandleSystemReset(onReset);
+  loopHeartbeat = micros();
+  // Fail closed if the hardware timer cannot be allocated.
+  if (!outputTimer.begin(updateOutputs, solenoid::kTickUs)) {
+    while (true) { usbMIDI.read(); }
+  }
+  outputTimer.priority(64);
 }
 
 void loop() {
-  usbMIDI.read();
-}
-
-//
-// Round Robin Voicing
-// -------------------
-
-byte recentPin = 5;
-uint8_t playingNotes[] = { 0,0,0,0 }; // indexed to soundpins
-void onNoteOnRoundRobin(byte channel, byte note, byte velocity) {
-  unsigned int freq = frequencyFromNote(note);
-  recentPin = (recentPin + 1) % 4;
-  // todo - this should only start playing notes if there are available
-  // voices - ie, only use pins corresponding to playingNotes positions that eq 0
-  tone_multi(channel - 1, freq, 0);
-  playingNotes[recentPin] = note;
-}
-
-void onNoteOffRoundRobin(byte channel, byte note, byte velocity) {
-  for (byte i = 0; i < 4; i++) {
-    if (playingNotes[i] == note) {
-      noTone_multi(i);
-      playingNotes[i] = 0;
-    }
-  }
-}
-
-//
-// Channel Voicing (one voice per MIDI channel 1-4)
-// ------------------------------------------------
-
-void onNoteOnChannelVoicing(byte channel, byte note, byte velocity) {
-  tone_multi(channel - 1, frequencyFromNote(note), 0);
-}
-
-void onNoteOffChannelVoicing(byte channel, byte note, byte velocity) {
-  noTone_multi(channel - 1);
-}
-
-// convert midi note to frequency, based on A440
-unsigned int frequencyFromNote(byte note) {
-  return (float(440) * pow(2, float((note - 57) / float(12))));
+  loopHeartbeat = micros();
+  for (uint8_t n = 0; n < 32 && usbMIDI.read(); ++n) { loopHeartbeat = micros(); }
 }
