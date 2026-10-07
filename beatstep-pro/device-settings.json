@@ -1,0 +1,27 @@
+{
+  "format": "solenoid-instrument-settings-reference-v1",
+  "device": "BeatStepPro",
+  "mcc_importable": false,
+  "note": "Reference for MIDI Control Center Device Settings, not a native .beatsteppro_ds export. Set these values in MCC after backing up existing Device Settings. Global parameter IDs refer to Arturia BeatStepPro.json, paramId 65; MIDI channel labels are one-based and raw values are zero-based.",
+  "settings": [
+    {"name": "User Channel", "value": "16", "globalParamId": 6, "raw": 15},
+    {"name": "Seq1 Send", "value": "1", "globalParamId": 64, "raw": 0},
+    {"name": "Seq1 Rcv", "value": "1", "globalParamId": 65, "raw": 0},
+    {"name": "Seq2 Send", "value": "2", "globalParamId": 66, "raw": 1},
+    {"name": "Seq2 Rcv", "value": "2", "globalParamId": 67, "raw": 1},
+    {"name": "Drum Send", "value": "10", "globalParamId": 68, "raw": 9},
+    {"name": "Drum Rcv", "value": "10", "globalParamId": 69, "raw": 9},
+    {"name": "Drum Map", "value": "Chromatic", "globalParamId": 39, "raw": 3},
+    {"name": "Auto-sync", "value": "Off", "globalParamId": 17, "raw": 0},
+    {"name": "Tempo", "value": "Project", "globalParamId": 20, "raw": 1},
+    {"name": "Metronome On/Off", "value": "Off", "globalParamId": 32, "raw": 0},
+    {"name": "Metronome Channel", "value": "15", "globalParamId": 35, "raw": 14},
+    {"name": "Transports", "value": "MIDI", "globalParamId": 96, "raw": 1},
+    {"name": "Stop Channel", "value": "16", "globalParamId": 97, "raw": 15},
+    {"name": "Stop CC", "value": "120", "globalParamId": 100, "raw": 120}
+  ],
+  "front_panel": [
+    {"control": "SYNC", "value": "INT"},
+    {"control": "CONTROL MODE encoder mode", "value": "CC (not MCU/HUI)"}
+  ]
+}

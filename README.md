@@ -36,7 +36,9 @@ These are physical actuators, so envelope and velocity affect the sound through 
 
 ## BeatStep Pro setup
 
-Use Arturia MIDI Control Center to configure and store the following on the Pro. Set its clock source to **Internal** for this setup, and enable USB MIDI clock/transport output so Stop and the clock-loss timeout reach the instrument.
+The generated [MCC preset and setup instructions](beatstep-pro/README.md) configure the Control Mode mappings below in one project import. The separate global settings currently have a JSON reference and manual checklist; a native Device Settings export still needs to be captured from MCC with the Pro connected.
+
+Use Arturia MIDI Control Center to configure and store the following on the Pro. Set its clock source to **Internal** for this setup. Route its USB MIDI clock/transport through MIDI Bridge so Stop and the clock-loss timeout reach the instrument; verify them before powered testing.
 
 | Pro section | MIDI channel | Purpose |
 | --- | --- | --- |
