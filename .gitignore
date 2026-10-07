@@ -1,2 +1,4 @@
 .build/
 .DS_Store
+midi-bridge/.swiftpm/
+midi-bridge/dist/

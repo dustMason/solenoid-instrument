@@ -4,6 +4,27 @@ Four independent solenoid voices for a **Teensy 3.1 or 3.2**, designed for the A
 
 The driver outputs remain **pins 9, 10, 11, 12**, in that order. This preserves the original sketch's wiring. Confirm the actual Teensy model and assembled driver wiring before flashing: the driver-board artwork alone does not identify the Teensy. The build rejects other MCU types and non-MIDI USB modes.
 
+## Build the Mac app
+
+The native MIDI Bridge app's source, Swift package, tests and packaging script are included in [`midi-bridge/`](midi-bridge/). Build on a Mac with Xcode Command Line Tools and Swift 5.9 or later (`xcode-select --install` if needed). No third-party packages or full Xcode project are required.
+
+From this repository's root:
+
+```sh
+bash midi-bridge/scripts/build-app.sh
+open "midi-bridge/dist/MIDI Bridge.app"
+```
+
+The script creates a locally signed release app and `midi-bridge/dist/MIDI Bridge.zip`. It builds for the current Mac's architecture; building on the M1 produces an Apple Silicon app for macOS 12 or later. Build output is ignored by Git.
+
+Run the app's five virtual CoreMIDI tests with:
+
+```sh
+bash midi-bridge/scripts/test.sh
+```
+
+Connect both USB devices to the Mac, open the app, and select `BeatStep Pro → Teensy MIDI` if automatic selection does not find them. See the [Mac app README](midi-bridge/README.md) for prerequisites, controls, signing, and test details. These app commands are separate from the firmware build below.
+
 ## Playing it
 
 - **Tap:** a positive Note On starts one short pulse. Note Off and Note On with velocity zero never make a hit. Gate duration does not hold the coil on or truncate the tap. Velocity changes pulse width.
